@@ -1,0 +1,243 @@
+// This is your Prisma schema file for Reckon
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  engineType = "library" // or "binary" / "wasm" depending on your target
+}
+
+datasource db {
+  provider  = "postgresql" // or "mysql", "sqlite", etc.
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------- AUTH ----------
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  profession    Profession @default(OTHER)
+  onboardingCompleted Boolean    @default(false)
+  createdAt     DateTime  @default(now())
+
+  accounts      Account[]
+  sessions      Session[]
+  goals         Goal[]
+  lifelines     Lifeline?
+  lifelineUsages LifelineUsage[]
+  weeklyLimits  WeeklyLimitUsage[]
+  achievements  UserAchievement[]
+  streak        Streak?
+  notifications Notification[]
+  aiMessages    AIMessage[]
+  
+}
+
+enum Profession {
+  DEVELOPER
+  CYBERSECURITY
+  STUDENT
+  TEACHER
+  DESIGNER
+  PROFESSIONAL
+  OTHER
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ---------- GOALS ----------
+
+model Goal {
+  id          String     @id @default(cuid())
+  userId      String
+  title       String
+  description String?
+  category    String?
+  deadline    DateTime
+  status      GoalStatus @default(ACTIVE)
+  createdAt   DateTime   @default(now())
+  completedAt DateTime?
+
+  user                 User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  consequenceAssignments ConsequenceAssignment[]
+
+  @@index([userId, status])
+  @@index([deadline])
+}
+
+enum GoalStatus {
+  ACTIVE
+  COMPLETED
+  MISSED
+}
+
+// ---------- CONSEQUENCE CATALOG (seed data, not user generated) ----------
+
+model Consequence {
+  id               String     @id @default(cuid())
+  profession       Profession
+  name             String
+  description      String
+  difficulty       Difficulty
+  externalPlatform String?
+  externalUrl      String?
+  estimatedMinutes Int
+
+  assignments ConsequenceAssignment[]
+
+  @@unique([profession, name])
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+model ConsequenceAssignment {
+  id              String          @id @default(cuid())
+  userId          String
+  goalId          String
+  consequenceId   String
+  status          ConsequenceStatus @default(PENDING)
+  escalationLevel Int             @default(0)
+  assignedAt      DateTime        @default(now())
+  deadline        DateTime
+  completedAt     DateTime?
+
+  goal        Goal        @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  consequence Consequence @relation(fields: [consequenceId], references: [id])
+
+  @@index([userId, status])
+}
+
+enum ConsequenceStatus {
+  PENDING
+  COMPLETED
+  MISSED
+}
+
+model WeeklyLimitUsage {
+  id         String   @id @default(cuid())
+  userId     String
+  weekStart  DateTime
+  easyUsed   Int      @default(0)
+  mediumUsed Int      @default(0)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, weekStart])
+}
+
+// ---------- LIFELINES ----------
+
+model Lifeline {
+  id        String @id @default(cuid())
+  userId    String @unique
+  remaining Int    @default(7)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model LifelineUsage {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   @default("shield")
+  usedAt    DateTime @default(now())
+  context   String?  // e.g. goalId or consequenceAssignmentId it was used on
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ---------- ACHIEVEMENTS ----------
+
+model Achievement {
+  id          String @id @default(cuid())
+  name        String
+  description String
+  criteriaKey String @unique // used by backend logic to check unlock conditions
+
+  userAchievements UserAchievement[]
+}
+
+model UserAchievement {
+  id            String   @id @default(cuid())
+  userId        String
+  achievementId String
+  unlockedAt    DateTime @default(now())
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement Achievement @relation(fields: [achievementId], references: [id])
+
+  @@unique([userId, achievementId])
+}
+
+// ---------- STREAKS ----------
+
+model Streak {
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  current         Int       @default(0)
+  longest         Int       @default(0)
+  lastCompletedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ---------- NOTIFICATIONS ----------
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+}
+
+// ---------- AI ASSISTANT ----------
+
+model AIMessage {
+  id        String   @id @default(cuid())
+  userId    String
+  role      String // "user" | "assistant"
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}

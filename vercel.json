@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/resolve-deadlines",
+      "schedule": "0 3 * * *"
+    }
+  ]
+}
