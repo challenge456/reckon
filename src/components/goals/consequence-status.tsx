@@ -2,13 +2,16 @@
 
 import type { ConsequenceAssignment, Consequence } from "@prisma/client";
 import { completeConsequence } from "@/lib/actions/consequences";
+import { useLifelineAction } from "@/lib/actions/lifelines";
 
 export function ConsequenceStatus({
   assignment,
   atEscalationCap,
+  remainingLifelines,
 }: {
   assignment: ConsequenceAssignment & { consequence: Consequence };
   atEscalationCap?: boolean;
+  remainingLifelines?: number;
 }) {
   const { consequence } = assignment;
 
@@ -33,26 +36,44 @@ export function ConsequenceStatus({
             Complete by: {assignment.deadline.toLocaleString()}
           </p>
 
-          {consequence.externalUrl && (
-            <a
-              href={consequence.externalUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-3 inline-block rounded-lg border border-neutral-700 px-3 py-1.5 text-xs hover:bg-neutral-800"
-            >
-              Open Challenge ↗
-            </a>
-          )}
+          <div className="mt-3 flex flex-wrap gap-2">
+            {consequence.externalUrl && (
+              <a
+                href={consequence.externalUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block rounded-lg border border-neutral-700 px-3 py-1.5 text-xs hover:bg-neutral-800"
+              >
+                Open Challenge ↗
+              </a>
+            )}
 
-          <form action={completeConsequence} className="mt-3">
-            <input type="hidden" name="assignmentId" value={assignment.id} />
-            <button
-              type="submit"
-              className="rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-neutral-900 transition hover:bg-neutral-200"
-            >
-              Mark Complete
-            </button>
-          </form>
+            <form action={completeConsequence} className="inline-block">
+              <input type="hidden" name="assignmentId" value={assignment.id} />
+              <button
+                type="submit"
+                className="rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-neutral-900 transition hover:bg-neutral-200"
+              >
+                Mark Complete
+              </button>
+            </form>
+
+            {remainingLifelines !== undefined && remainingLifelines > 0 && (
+              <form action={useLifelineAction} className="inline-block">
+                <input
+                  type="hidden"
+                  name="consequenceAssignmentId"
+                  value={assignment.id}
+                />
+                <button
+                  type="submit"
+                  className="rounded-lg border border-amber-600 bg-amber-950 px-3 py-1.5 text-xs font-medium text-amber-200 transition hover:bg-amber-900"
+                >
+                  🛟 Use Lifeline ({remainingLifelines})
+                </button>
+              </form>
+            )}
+          </div>
           <p className="mt-2 text-xs text-neutral-600">
             Completion is self-reported — external platforms can&apos;t be
             automatically verified.

@@ -30,12 +30,33 @@ export default async function OnboardingPage() {
       redirect("/signin");
     }
 
-    await prisma.user.update({
-      where: { id: currentSession.user.id },
-      data: {
-        profession,
-        onboardingCompleted: true,
-      },
+    const userId = currentSession.user.id;
+
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          profession,
+          onboardingCompleted: true,
+        },
+      });
+
+      // Create lifelines for the user (7 by default)
+      await tx.lifeline.create({
+        data: {
+          userId,
+          remaining: 7,
+        },
+      });
+
+      // Create streak record
+      await tx.streak.create({
+        data: {
+          userId,
+          current: 0,
+          longest: 0,
+        },
+      });
     });
 
     redirect("/dashboard");

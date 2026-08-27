@@ -37,10 +37,12 @@ export function GoalCard({
   goal,
   eligibleOptions,
   weeklyLimits,
+  remainingLifelines,
 }: {
   goal: GoalWithAssignments;
   eligibleOptions?: Consequence[];
   weeklyLimits?: { easyRemaining: number; mediumRemaining: number };
+  remainingLifelines?: number;
 }) {
   // consequenceAssignments is ordered newest-first (see the page query).
   const latest = goal.consequenceAssignments[0];
@@ -108,7 +110,7 @@ export function GoalCard({
         </>
       )}
 
-      {showStatus && <ConsequenceStatus assignment={latest} atEscalationCap={atCap} />}
+      {showStatus && <ConsequenceStatus assignment={latest} atEscalationCap={atCap} remainingLifelines={remainingLifelines} />}
     </div>
   );
 }

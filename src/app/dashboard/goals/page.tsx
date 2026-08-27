@@ -5,6 +5,7 @@ import { CreateGoalForm } from "@/components/goals/create-goal-form";
 import { GoalCard } from "@/components/goals/goal-card";
 import { resolveAllDeadlines } from "@/lib/deadline-engine";
 import { getEligibleConsequences, MAX_ESCALATIONS } from "@/lib/consequence-engine";
+import { getRemainingLifelines } from "@/lib/lifelines";
 
 export default async function GoalsPage() {
   const session = await auth();
@@ -33,9 +34,10 @@ export default async function GoalsPage() {
     return latest.status === "MISSED" && latest.escalationLevel < MAX_ESCALATIONS;
   });
 
-  const eligible = needsConsequence
-    ? await getEligibleConsequences(session.user.id)
-    : null;
+  const [eligible, remainingLifelines] = await Promise.all([
+    needsConsequence ? getEligibleConsequences(session.user.id) : null,
+    getRemainingLifelines(session.user.id),
+  ]);
 
   const activeGoals = goals.filter((g) => g.status === "ACTIVE");
   const historyGoals = goals.filter((g) => g.status !== "ACTIVE");
@@ -45,6 +47,11 @@ export default async function GoalsPage() {
       <div className="mx-auto max-w-3xl">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <h1 className="text-2xl font-semibold">🎯 My Goals</h1>
+          {remainingLifelines > 0 && (
+            <div className="text-sm text-amber-300">
+              🛟 {remainingLifelines} lifeline{remainingLifelines !== 1 ? "s" : ""} remaining
+            </div>
+          )}
           <CreateGoalForm />
         </div>
 
@@ -75,6 +82,7 @@ export default async function GoalsPage() {
                 goal={goal}
                 eligibleOptions={eligible?.options}
                 weeklyLimits={eligible?.weeklyLimits}
+                remainingLifelines={remainingLifelines}
               />
             ))}
           </div>
