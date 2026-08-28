@@ -7,6 +7,7 @@ import {
   getOrCreateWeeklyUsage,
   MAX_ESCALATIONS,
 } from "@/lib/consequence-engine";
+import { checkAndUnlockAchievements } from "@/lib/achievements";
 import { revalidatePath } from "next/cache";
 
 export async function assignConsequence(formData: FormData) {
@@ -135,6 +136,8 @@ export async function completeConsequence(formData: FormData) {
     where: { id: assignmentId },
     data: { status: "COMPLETED", completedAt: new Date() },
   });
+
+  await checkAndUnlockAchievements(session.user.id);
 
   revalidatePath("/dashboard/goals");
 }

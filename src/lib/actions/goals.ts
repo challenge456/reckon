@@ -1,6 +1,7 @@
 "use server";
 
 import { updateStreakOnCompletion } from "@/lib/streak";
+import { checkAndUnlockAchievements } from "@/lib/achievements";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { createGoalSchema } from "@/lib/validations/goal";
@@ -40,9 +41,11 @@ export async function completeGoal(formData: FormData) {
   });
 
   await updateStreakOnCompletion(session.user.id);
+  await checkAndUnlockAchievements(session.user.id);
 
   revalidatePath("/dashboard/goals");
   revalidatePath("/dashboard");
+  revalidatePath("/dashboard/achievements");
 }
 
 export async function createGoal(formData: FormData) {
@@ -77,5 +80,8 @@ export async function createGoal(formData: FormData) {
     },
   });
 
+  await checkAndUnlockAchievements(session.user.id);
+
   revalidatePath("/dashboard/goals");
+  revalidatePath("/dashboard/achievements");
 }
