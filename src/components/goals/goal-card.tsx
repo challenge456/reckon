@@ -5,6 +5,7 @@ import { completeGoal } from "@/lib/actions/goals";
 import { MAX_ESCALATIONS } from "@/lib/consequence-engine";
 import { ConsequencePicker } from "./consequence-picker";
 import { ConsequenceStatus } from "./consequence-status";
+import { CheckCircle2, Trash2, Edit2 } from "lucide-react";
 
 type GoalWithAssignments = Goal & {
   consequenceAssignments: (ConsequenceAssignment & { consequence: Consequence })[];
@@ -21,16 +22,28 @@ function formatRemaining(deadline: Date) {
   return `${totalHours}h ${minutes}m remaining`;
 }
 
-const STATUS_BORDER: Record<string, string> = {
-  ACTIVE: "border-neutral-800",
-  COMPLETED: "border-green-900",
-  MISSED: "border-red-900",
+const STATUS_STYLES: Record<string, { border: string; bg: string; badge: string }> = {
+  ACTIVE: {
+    border: "border-primary/30",
+    bg: "bg-primary/5",
+    badge: "bg-primary/20 text-primary",
+  },
+  COMPLETED: {
+    border: "border-success/30",
+    bg: "bg-success/5",
+    badge: "bg-success/20 text-success",
+  },
+  MISSED: {
+    border: "border-error/30",
+    bg: "bg-error/5",
+    badge: "bg-error/20 text-error",
+  },
 };
 
 const STATUS_LABEL: Record<string, string> = {
-  ACTIVE: "🟢 Active",
-  COMPLETED: "✅ Completed",
-  MISSED: "🔴 Missed",
+  ACTIVE: "Active",
+  COMPLETED: "Completed",
+  MISSED: "Missed",
 };
 
 export function GoalCard({
@@ -44,7 +57,6 @@ export function GoalCard({
   weeklyLimits?: { easyRemaining: number; mediumRemaining: number };
   remainingLifelines?: number;
 }) {
-  // consequenceAssignments is ordered newest-first (see the page query).
   const latest = goal.consequenceAssignments[0];
   const atCap = latest ? latest.escalationLevel >= MAX_ESCALATIONS : false;
 
@@ -54,63 +66,85 @@ export function GoalCard({
 
   const showStatus = goal.status === "MISSED" && latest && !showPicker;
 
+  const styles = STATUS_STYLES[goal.status];
+
   return (
-    <div
-      className={`rounded-lg border bg-neutral-900 p-4 ${STATUS_BORDER[goal.status]}`}
-    >
+    <div className={`card border-l-4 ${styles.border} ${styles.bg} animate-fade-in-up hover-lift press-effect`}>
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="font-medium">{goal.title}</p>
-          {goal.category && (
-            <span className="mt-1 inline-block rounded bg-neutral-800 px-2 py-0.5 text-xs text-neutral-400">
-              {goal.category}
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-2">
+            <h3 className="font-semibold text-lg">{goal.title}</h3>
+            <span className={`badge text-xs ${styles.badge}`}>
+              {STATUS_LABEL[goal.status]}
             </span>
+          </div>
+
+          {goal.description && (
+            <p className="text-sm text-muted mb-2">{goal.description}</p>
+          )}
+
+          <div className="flex flex-wrap items-center gap-3 text-xs text-muted mt-2">
+            {goal.category && (
+              <span className="inline-block rounded-full bg-muted/50 px-2.5 py-1">
+                {goal.category}
+              </span>
+            )}
+            <span className="font-medium">
+              {goal.deadline.toLocaleDateString()} at {goal.deadline.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            </span>
+            {goal.status === "ACTIVE" && (
+              <span className="font-medium text-primary">
+                ⏱ {formatRemaining(goal.deadline)}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-2">
+          {goal.status === "ACTIVE" && (
+            <form action={completeGoal} className="contents">
+              <input type="hidden" name="goalId" value={goal.id} />
+              <button
+                type="submit"
+                className="btn btn-sm btn-primary transition-smooth"
+                title="Mark this goal as complete"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                Complete
+              </button>
+            </form>
           )}
         </div>
-        <span className="whitespace-nowrap text-xs text-neutral-400">
-          {STATUS_LABEL[goal.status]}
-        </span>
       </div>
 
-      {goal.description && (
-        <p className="mt-2 text-sm text-neutral-400">{goal.description}</p>
-      )}
-
-      <p className="mt-3 text-xs text-neutral-500">
-        Deadline: {goal.deadline.toLocaleString()}
-        {goal.status === "ACTIVE" && (
-          <> · ⏱ {formatRemaining(goal.deadline)}</>
-        )}
-      </p>
-
-      {goal.status === "ACTIVE" && (
-        <form action={completeGoal} className="mt-3">
-          <input type="hidden" name="goalId" value={goal.id} />
-          <button
-            type="submit"
-            className="rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-neutral-900 transition hover:bg-neutral-200"
-          >
-            ✅ Mark Complete
-          </button>
-        </form>
-      )}
-
+      {/* Consequence Picker */}
       {showPicker && eligibleOptions && (
-        <>
+        <div className="mt-4 pt-4 border-t border-border">
           {latest?.status === "MISSED" && (
-            <p className="mt-4 text-xs text-amber-500">
-              You missed your last consequence — here&apos;s another one.
-            </p>
+            <div className="mb-4 p-3 rounded-lg bg-warning/10 border border-warning/20 text-sm">
+              <p className="font-medium text-warning">You missed your last consequence.</p>
+              <p className="text-xs text-warning/80 mt-1">Choose another one to keep making progress.</p>
+            </div>
           )}
           <ConsequencePicker
             goalId={goal.id}
             options={eligibleOptions}
             weeklyLimits={weeklyLimits}
           />
-        </>
+        </div>
       )}
 
-      {showStatus && <ConsequenceStatus assignment={latest} atEscalationCap={atCap} remainingLifelines={remainingLifelines} />}
+      {/* Consequence Status */}
+      {showStatus && (
+        <div className="mt-4 pt-4 border-t border-border">
+          <ConsequenceStatus
+            assignment={latest}
+            atEscalationCap={atCap}
+            remainingLifelines={remainingLifelines}
+          />
+        </div>
+      )}
     </div>
   );
 }

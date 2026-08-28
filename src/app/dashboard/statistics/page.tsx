@@ -1,7 +1,8 @@
 import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
-import { getUserStatistics, getGoalHistory } from "@/lib/statistics";
-import { StatCard, ProgressBar, GoalHistoryItem } from "@/components/statistics/stat-cards";
+import { getReliability } from "@/lib/stats";
+import { BarChart3, TrendingUp, Zap } from "lucide-react";
 
 export default async function StatisticsPage() {
   const session = await auth();
@@ -10,150 +11,209 @@ export default async function StatisticsPage() {
     redirect("/signin");
   }
 
-  const [stats, history] = await Promise.all([
-    getUserStatistics(session.user.id),
-    getGoalHistory(session.user.id, 20),
+  const [reliability, streak, goals, consequences, completedToday] = await Promise.all([
+    getReliability(session.user.id),
+    prisma.streak.findUnique({ where: { userId: session.user.id } }),
+    prisma.goal.findMany({
+      where: { userId: session.user.id },
+      select: { status: true, createdAt: true },
+    }),
+    prisma.consequenceAssignment.findMany({
+      where: { userId: session.user.id },
+      select: { status: true },
+    }),
+    prisma.goal.count({
+      where: {
+        userId: session.user.id,
+        status: "COMPLETED",
+        completedAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
+      },
+    }),
   ]);
 
-  const trendPercent =
-    stats.goals.lastMonth > 0
-      ? Math.round(((stats.goals.thisMonth - stats.goals.lastMonth) / stats.goals.lastMonth) * 100)
-      : 0;
+  const activeGoals = goals.filter((g) => g.status === "ACTIVE").length;
+  const completedGoals = goals.filter((g) => g.status === "COMPLETED").length;
+  const missedGoals = goals.filter((g) => g.status === "MISSED").length;
+  const completedConsequences = consequences.filter((c) => c.status === "COMPLETED").length;
+  const missedConsequences = consequences.filter((c) => c.status === "MISSED").length;
 
   return (
-    <div className="min-h-screen bg-neutral-950 p-8 text-white">
-      <div className="mx-auto max-w-6xl">
-        <h1 className="mb-2 text-3xl font-semibold">📊 Statistics</h1>
-        <p className="mb-8 text-neutral-400">
-          Track your progress and accountability metrics.
-        </p>
-
-        {/* Overview Stats */}
-        <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard
-            label="Total Goals"
-            value={stats.goals.total}
-            icon="🎯"
-            trend={
-              trendPercent !== 0
-                ? {
-                    direction: trendPercent > 0 ? "up" : "down",
-                    percent: Math.abs(trendPercent),
-                  }
-                : undefined
-            }
-          />
-          <StatCard
-            label="Reliability"
-            value={`${stats.reliability}%`}
-            subtext={`${stats.goals.completed} completed`}
-            icon="📈"
-          />
-          <StatCard
-            label="Current Streak"
-            value={stats.streak.current}
-            subtext={`Longest: ${stats.streak.longest} days`}
-            icon="🔥"
-          />
-          <StatCard
-            label="Lifelines"
-            value={stats.lifelinesRemaining}
-            subtext="7 total"
-            icon="🛟"
-          />
-        </div>
-
-        {/* Progress Bars */}
-        <div className="mb-8 grid gap-4 sm:grid-cols-2">
-          <ProgressBar
-            label="Goals Completed"
-            value={stats.goals.completed}
-            max={stats.goals.total || 1}
-            color="green"
-          />
-          <ProgressBar
-            label="Goals Missed"
-            value={stats.goals.missed}
-            max={stats.goals.total || 1}
-            color="red"
-          />
-          <ProgressBar
-            label="Consequences Completed"
-            value={stats.consequences.completed}
-            max={stats.consequences.total || 1}
-            color="blue"
-          />
-          <ProgressBar
-            label="Active Goals"
-            value={stats.goals.active}
-            max={stats.goals.total || 1}
-            color="amber"
-          />
-        </div>
-
-        {/* Additional Metrics */}
-        <div className="mb-8 grid gap-4 sm:grid-cols-3">
-          <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
-            <p className="text-xs text-neutral-400">This Month</p>
-            <p className="mt-1 text-xl font-bold text-white">
-              {stats.goals.thisMonth} goals
-            </p>
-          </div>
-          <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
-            <p className="text-xs text-neutral-400">Last Month</p>
-            <p className="mt-1 text-xl font-bold text-white">
-              {stats.goals.lastMonth} goals
-            </p>
-          </div>
-          <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
-            <p className="text-xs text-neutral-400">Avg Completion Time</p>
-            <p className="mt-1 text-xl font-bold text-white">
-              {stats.goals.avgCompletionHours > 0
-                ? `${stats.goals.avgCompletionHours}h`
-                : "—"}
-            </p>
-          </div>
-        </div>
-
-        {/* Goal History */}
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <BarChart3 className="w-8 h-8 text-primary" />
         <div>
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Goal History</h2>
-            <p className="text-sm text-neutral-400">
-              {history.total} total goal{history.total !== 1 ? "s" : ""}
-            </p>
-          </div>
-
-          {history.goals.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-neutral-800 p-10 text-center">
-              <p className="mb-1 text-lg">📝 No goals yet</p>
-              <p className="text-sm text-neutral-400">
-                Create your first goal to start tracking progress.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {history.goals.map((goal) => (
-                <GoalHistoryItem
-                  key={goal.id}
-                  title={goal.title}
-                  status={goal.status}
-                  createdAt={goal.createdAt}
-                  deadline={goal.deadline}
-                  consequence={
-                    goal.consequenceAssignments[0]
-                      ? {
-                          name: goal.consequenceAssignments[0].consequence.name,
-                          status: goal.consequenceAssignments[0].status,
-                        }
-                      : undefined
-                  }
-                />
-              ))}
-            </div>
-          )}
+          <h1 className="text-3xl font-bold">Statistics</h1>
+          <p className="text-muted mt-1">Your accountability metrics at a glance</p>
         </div>
       </div>
+
+      {/* Key Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="card">
+          <p className="text-xs font-medium text-muted uppercase">Reliability</p>
+          <p className="text-3xl font-bold mt-2 text-primary">
+            {reliability.percentage ?? "—"}%
+          </p>
+          <p className="text-xs text-muted mt-2">
+            {reliability.completed} completed, {reliability.missed} missed
+          </p>
+        </div>
+
+        <div className="card">
+          <p className="text-xs font-medium text-muted uppercase">Current Streak</p>
+          <p className="text-3xl font-bold mt-2 text-warning">
+            {streak?.current ?? 0}
+          </p>
+          <p className="text-xs text-muted mt-2">
+            Longest: {streak?.longest ?? 0}
+          </p>
+        </div>
+
+        <div className="card">
+          <p className="text-xs font-medium text-muted uppercase">Total Goals</p>
+          <p className="text-3xl font-bold mt-2">{goals.length}</p>
+          <p className="text-xs text-muted mt-2">
+            {completedToday} completed today
+          </p>
+        </div>
+
+        <div className="card">
+          <p className="text-xs font-medium text-muted uppercase">Consequences</p>
+          <p className="text-3xl font-bold mt-2">{consequences.length}</p>
+          <p className="text-xs text-muted mt-2">
+            {completedConsequences} completed
+          </p>
+        </div>
+      </div>
+
+      {/* Goal Breakdown */}
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold">Goal Performance</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="card">
+            <div className="flex items-center justify-between mb-4">
+              <p className="font-medium">Completed</p>
+              <span className="text-2xl font-bold text-success">{completedGoals}</span>
+            </div>
+            <div className="w-full bg-muted rounded-full h-2">
+              <div
+                className="bg-success h-2 rounded-full transition-all"
+                style={{
+                  width: `${goals.length > 0 ? (completedGoals / goals.length) * 100 : 0}%`,
+                }}
+              />
+            </div>
+            <p className="text-xs text-muted mt-2">
+              {goals.length > 0
+                ? Math.round((completedGoals / goals.length) * 100)
+                : 0}%
+              of all goals
+            </p>
+          </div>
+
+          <div className="card">
+            <div className="flex items-center justify-between mb-4">
+              <p className="font-medium">Missed</p>
+              <span className="text-2xl font-bold text-error">{missedGoals}</span>
+            </div>
+            <div className="w-full bg-muted rounded-full h-2">
+              <div
+                className="bg-error h-2 rounded-full transition-all"
+                style={{
+                  width: `${goals.length > 0 ? (missedGoals / goals.length) * 100 : 0}%`,
+                }}
+              />
+            </div>
+            <p className="text-xs text-muted mt-2">
+              {goals.length > 0 ? Math.round((missedGoals / goals.length) * 100) : 0}% of
+              all goals
+            </p>
+          </div>
+
+          <div className="card">
+            <div className="flex items-center justify-between mb-4">
+              <p className="font-medium">Active</p>
+              <span className="text-2xl font-bold text-primary">{activeGoals}</span>
+            </div>
+            <div className="w-full bg-muted rounded-full h-2">
+              <div
+                className="bg-primary h-2 rounded-full transition-all"
+                style={{
+                  width: `${goals.length > 0 ? (activeGoals / goals.length) * 100 : 0}%`,
+                }}
+              />
+            </div>
+            <p className="text-xs text-muted mt-2">
+              {goals.length > 0 ? Math.round((activeGoals / goals.length) * 100) : 0}% of
+              all goals
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Consequence Stats */}
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold">Consequence Performance</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="card">
+            <div className="flex items-center justify-between mb-4">
+              <p className="font-medium">Completed</p>
+              <span className="text-2xl font-bold text-success">
+                {completedConsequences}
+              </span>
+            </div>
+            <div className="w-full bg-muted rounded-full h-2">
+              <div
+                className="bg-success h-2 rounded-full transition-all"
+                style={{
+                  width: `${
+                    consequences.length > 0
+                      ? (completedConsequences / consequences.length) * 100
+                      : 0
+                  }%`,
+                }}
+              />
+            </div>
+            <p className="text-xs text-muted mt-2">
+              You faced these challenges and won
+            </p>
+          </div>
+
+          <div className="card">
+            <div className="flex items-center justify-between mb-4">
+              <p className="font-medium">Missed</p>
+              <span className="text-2xl font-bold text-error">{missedConsequences}</span>
+            </div>
+            <div className="w-full bg-muted rounded-full h-2">
+              <div
+                className="bg-error h-2 rounded-full transition-all"
+                style={{
+                  width: `${
+                    consequences.length > 0
+                      ? (missedConsequences / consequences.length) * 100
+                      : 0
+                  }%`,
+                }}
+              />
+            </div>
+            <p className="text-xs text-muted mt-2">
+              These escalated to new challenges
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Empty State */}
+      {goals.length === 0 && (
+        <div className="card-lg text-center py-12">
+          <TrendingUp className="w-16 h-16 mx-auto text-muted/20 mb-4" />
+          <h3 className="text-xl font-semibold mb-2">No data yet</h3>
+          <p className="text-muted">
+            Create and complete goals to start building your statistics.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
