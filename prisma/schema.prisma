@@ -34,7 +34,7 @@ model User {
   streak        Streak?
   notifications Notification[]
   aiMessages    AIMessage[]
-  
+  consequenceAssignments ConsequenceAssignment[]
 }
 
 enum Profession {
@@ -134,6 +134,7 @@ model ConsequenceAssignment {
   deadline        DateTime
   completedAt     DateTime?
 
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   goal        Goal        @relation(fields: [goalId], references: [id], onDelete: Cascade)
   consequence Consequence @relation(fields: [consequenceId], references: [id])
 
