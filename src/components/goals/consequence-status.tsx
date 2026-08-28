@@ -3,6 +3,7 @@
 import type { ConsequenceAssignment, Consequence } from "@prisma/client";
 import { completeConsequence } from "@/lib/actions/consequences";
 import { useLifelineAction } from "@/lib/actions/lifelines";
+import { ExternalChallengeLink, ExternalPlatformInfo } from "@/components/integrations/external-platforms";
 
 export function ConsequenceStatus({
   assignment,
@@ -36,18 +37,18 @@ export function ConsequenceStatus({
             Complete by: {assignment.deadline.toLocaleString()}
           </p>
 
-          <div className="mt-3 flex flex-wrap gap-2">
-            {consequence.externalUrl && (
-              <a
-                href={consequence.externalUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-block rounded-lg border border-neutral-700 px-3 py-1.5 text-xs hover:bg-neutral-800"
-              >
-                Open Challenge ↗
-              </a>
-            )}
+          {consequence.externalPlatform && consequence.externalUrl && (
+            <div className="mt-3 space-y-3">
+              <ExternalPlatformInfo platform={consequence.externalPlatform as any} />
+              <ExternalChallengeLink
+                platform={consequence.externalPlatform as any}
+                url={consequence.externalUrl}
+                label={`Open on ${consequence.externalPlatform}`}
+              />
+            </div>
+          )}
 
+          <div className="mt-3 flex flex-wrap gap-2">
             <form action={completeConsequence} className="inline-block">
               <input type="hidden" name="assignmentId" value={assignment.id} />
               <button
