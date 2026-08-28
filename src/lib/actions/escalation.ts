@@ -11,17 +11,28 @@ import { checkAndUnlockAchievements } from "@/lib/achievements";
 import { revalidatePath } from "next/cache";
 
 /**
- * Check for expired consequences and escalate them if applicable
- * Called: on goal page load, via cron job, or manually
+ * Check for expired consequences and escalate them if applicable.
+ * Called on goal page load, via cron job, or manually.
+ *
+ * If a userId is provided, it is used for server-side/background jobs.
+ * Otherwise, the authenticated user's ID is used.
  */
 export async function escalateExpiredConsequences(userId?: string) {
   const session = await auth();
-  if (!session?.user?.id && !userId) {
+
+  // We need either an explicit server-side user ID or an authenticated user.
+  if (!userId && !session?.user?.id) {
     console.error("No session for escalation");
     return { escalated: 0, failed: 0 };
   }
 
-  const targetUserId = userId || session.user.id;
+  // TypeScript now knows session.user.id exists in the fallback case.
+  const targetUserId = userId ?? session?.user?.id;
+
+  if (!targetUserId) {
+    console.error("Unable to determine target user for escalation");
+    return { escalated: 0, failed: 0 };
+  }
 
   // Find all PENDING consequences whose deadline has passed
   const expiredConsequences = await prisma.consequenceAssignment.findMany({
@@ -45,17 +56,19 @@ export async function escalateExpiredConsequences(userId?: string) {
       });
 
       // Check if we can escalate
-      const existingAssignments = await prisma.consequenceAssignment.findMany({
-        where: { goalId: consequence.goalId },
-        orderBy: { assignedAt: "desc" },
-      });
+      const existingAssignments =
+        await prisma.consequenceAssignment.findMany({
+          where: { goalId: consequence.goalId },
+          orderBy: { assignedAt: "desc" },
+        });
 
       const latestAssignment = existingAssignments[0];
-      const currentEscalationLevel = latestAssignment?.escalationLevel ?? 0;
+      const currentEscalationLevel =
+        latestAssignment?.escalationLevel ?? 0;
 
       // Only escalate if under cap
       if (currentEscalationLevel < MAX_ESCALATIONS) {
-        // Get eligible consequences for escalation (with stricter criteria)
+        // Get user
         const user = await prisma.user.findUnique({
           where: { id: targetUserId },
         });
@@ -65,7 +78,8 @@ export async function escalateExpiredConsequences(userId?: string) {
           continue;
         }
 
-        const allowedDifficulties = await getAllowedDifficulties(targetUserId);
+        const allowedDifficulties =
+          await getAllowedDifficulties(targetUserId);
 
         // Get available consequences
         const escalationPool = await prisma.consequence.findMany({
@@ -76,17 +90,21 @@ export async function escalateExpiredConsequences(userId?: string) {
         });
 
         if (escalationPool.length === 0) {
-          // No eligible consequences — this shouldn't happen with HARD always available
+          // This shouldn't happen if HARD consequences are always available.
           failed++;
           continue;
         }
 
-        // Pick a random consequence (could prefer HARD for escalation, but keep random for fairness)
+        // Pick a random consequence
         const escalatedConsequence =
-          escalationPool[Math.floor(Math.random() * escalationPool.length)];
+          escalationPool[
+            Math.floor(Math.random() * escalationPool.length)
+          ];
 
-        // Create new escalated assignment
-        const newDeadline = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        // Create a new deadline 24 hours from now
+        const newDeadline = new Date(
+          Date.now() + 24 * 60 * 60 * 1000
+        );
 
         await prisma.$transaction(async (tx) => {
           await tx.consequenceAssignment.create({
@@ -105,6 +123,7 @@ export async function escalateExpiredConsequences(userId?: string) {
             escalatedConsequence.difficulty === "MEDIUM"
           ) {
             const usage = await getOrCreateWeeklyUsage(targetUserId);
+
             await tx.weeklyLimitUsage.update({
               where: { id: usage.id },
               data: {
@@ -112,6 +131,7 @@ export async function escalateExpiredConsequences(userId?: string) {
                   escalatedConsequence.difficulty === "EASY"
                     ? usage.easyUsed + 1
                     : usage.easyUsed,
+
                 mediumUsed:
                   escalatedConsequence.difficulty === "MEDIUM"
                     ? usage.mediumUsed + 1
@@ -123,8 +143,7 @@ export async function escalateExpiredConsequences(userId?: string) {
 
         escalated++;
       } else {
-        // At escalation cap — mark as "final" consequence missed
-        // In future, could implement "consequences of final failure"
+        // At escalation cap — mark as final consequence missed
         failed++;
       }
     } catch (err) {
@@ -135,6 +154,7 @@ export async function escalateExpiredConsequences(userId?: string) {
 
   if (escalated > 0) {
     await checkAndUnlockAchievements(targetUserId);
+
     revalidatePath("/dashboard/goals");
     revalidatePath("/dashboard/challenges");
   }
@@ -143,16 +163,20 @@ export async function escalateExpiredConsequences(userId?: string) {
 }
 
 /**
- * Manually mark a consequence as completed (after external verification)
+ * Manually mark a consequence as completed.
  */
 export async function completeConsequenceManual(formData: FormData) {
   const session = await auth();
+
   if (!session?.user?.id) {
     console.error("No session for consequence completion");
     return;
   }
 
+  const userId = session.user.id;
+
   const assignmentId = formData.get("assignmentId");
+
   if (typeof assignmentId !== "string") {
     console.error("Missing assignment id");
     return;
@@ -162,7 +186,8 @@ export async function completeConsequenceManual(formData: FormData) {
     where: { id: assignmentId },
   });
 
-  if (!assignment || assignment.userId !== session.user.id) {
+  // Ownership check
+  if (!assignment || assignment.userId !== userId) {
     console.error("Consequence not found or unauthorized");
     return;
   }
@@ -174,10 +199,13 @@ export async function completeConsequenceManual(formData: FormData) {
 
   await prisma.consequenceAssignment.update({
     where: { id: assignmentId },
-    data: { status: "COMPLETED", completedAt: new Date() },
+    data: {
+      status: "COMPLETED",
+      completedAt: new Date(),
+    },
   });
 
-  await checkAndUnlockAchievements(session.user.id);
+  await checkAndUnlockAchievements(userId);
 
   revalidatePath("/dashboard/goals");
   revalidatePath("/dashboard/challenges");
