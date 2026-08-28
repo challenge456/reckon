@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
+import { Sidebar, MainContent } from "@/components/layout/sidebar";
 
 export default async function DashboardLayout({
   children,
@@ -22,5 +23,10 @@ export default async function DashboardLayout({
     redirect("/onboarding");
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      <Sidebar />
+      <MainContent>{children}</MainContent>
+    </>
+  );
 }
