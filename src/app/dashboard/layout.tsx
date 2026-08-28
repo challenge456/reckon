@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { Sidebar, MainContent } from "@/components/layout/sidebar";
+import { AIAssistant } from "@/components/ai/chat-widget";
 
 export default async function DashboardLayout({
   children,
@@ -27,6 +28,7 @@ export default async function DashboardLayout({
     <>
       <Sidebar />
       <MainContent>{children}</MainContent>
+      <AIAssistant />
     </>
   );
 }
