@@ -9,7 +9,6 @@ Instead of only reminding users about unfinished tasks, Reckon creates an accoun
 The result is a productivity system focused not just on **what you want to achieve**, but on **following through**.
 
 ---
-
 ## What is Reckon?
 
 Most productivity applications stop at:
