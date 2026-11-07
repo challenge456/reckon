@@ -22,7 +22,6 @@ Reckon adds another layer:
 Consequences are designed to remain useful rather than arbitrary. Depending on the user's profession, they can involve coding, cybersecurity learning, study exercises, design challenges, teaching activities, research, writing, or other skill-building tasks.
 
 ---
-
 ## How It Works
 
 ```text
