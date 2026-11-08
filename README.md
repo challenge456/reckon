@@ -1,5 +1,4 @@
 # RECKON
-
 ### Set the goal. Set the deadline. Reckon with the consequence.
 
 **Reckon** is a goal-achievement and accountability platform built around a simple idea: setting a goal should mean committing to it.
